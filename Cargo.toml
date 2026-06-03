@@ -1,0 +1,40 @@
+[package]
+name = "epycell"
+version = "0.1.0"
+edition = "2024"
+default-run = "epycell"
+description = "Terminal Jupyter notebook — your editor in every cell, kernel completions via LSP"
+license = "GPL-3.0-only"
+repository = "https://github.com/hebbian/epycell"
+keywords = ["jupyter", "notebook", "terminal", "tui", "sixel"]
+categories = ["command-line-utilities", "science"]
+readme = "README.md"
+
+[[bin]]
+name = "epycell"
+path = "src/main.rs"
+
+[[bin]]
+name = "epycell-lsp"
+path = "src/lsp.rs"
+
+[dependencies]
+anyhow = "1.0.102"
+libc = "0.2"
+base64 = "0.22.1"
+crossterm = "0.29.0"
+image = "0.25.10"
+jupyter-protocol = "2.0.1"
+portable-pty = "0.9.0"
+ratatui = "0.30.0"
+ratatui-image = { version = "11.0.2", default-features = false, features = ["image-defaults", "crossterm"] }
+runtimelib = { version = "3.0.0", features = ["tokio-runtime"] }
+serde = { version = "1", features = ["derive"] }
+syntect = { version = "5", default-features = false, features = ["default-fancy", "default-themes", "default-syntaxes"] }
+serde_json = "1.0.150"
+toml = "0.8"
+tempfile = "3.27.0"
+tokio = { version = "1.52.3", features = ["full"] }
+tui-markdown = { version = "0.3.7", default-features = false }
+tui-term = "0.3.4"
+uuid = { version = "1.23.2", features = ["v4"] }

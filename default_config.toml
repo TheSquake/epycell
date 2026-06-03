@@ -1,0 +1,39 @@
+# hxbook configuration
+# All fields are optional — missing values use compiled defaults.
+# Restart hxbook to apply changes.
+
+[theme]
+# UI colors (hex). These style the notebook chrome, not code syntax.
+# bg         = "#0d1926"
+# selected   = "#b1b9f9"
+# editing    = "#7ab87a"
+# inactive   = "#4a5a6a"
+# error      = "#b87a7a"
+# output     = "#7ab8b8"
+# status_nav = "#7a7ab8"
+# status_edit = "#7ab87a"
+
+# Syntax highlighting theme for code cells.
+# Built-in: "base16-ocean.dark", "base16-eighties.dark", "base16-mocha.dark",
+#           "InspiredGitHub", "Solarized (dark)", "Solarized (light)"
+# Or a path to any .tmTheme file (run `hxbook --init` to install bundled themes):
+#   syntax_theme = "/home/you/.config/hxbook/themes/dracula.tmTheme"
+syntax_theme = "base16-ocean.dark"
+
+[keys]
+# Format: "key" or "Mod+key" — comma-separated for multiple bindings.
+# Modifiers: Ctrl, Alt, Shift. Keys: a-z, 0-9, Enter, Esc, Tab, Space,
+# Up, Down, Left, Right, Home, End, PageUp, PageDown, Delete, F1-F12.
+run        = "Enter"
+run_all    = "Ctrl+r"
+run_above  = "Ctrl+a"
+interrupt  = "Ctrl+c"
+move_down  = "j, Down"
+move_up    = "k, Up"
+edit       = "i"
+edit_full  = "e"
+new_below  = "o"
+new_above  = "O"
+delete     = "d"
+save       = "w"
+quit       = "q"
