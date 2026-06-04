@@ -3,7 +3,7 @@
 Terminal Jupyter notebook — your editor in every cell, kernel completions via LSP.
 
 <!-- TODO: replace with your recorded GIF -->
-![demo](https://raw.githubusercontent.com/hebbian/epycell/main/demo.gif)
+![demo](https://raw.githubusercontent.com/TheSquake/epycell/main/demo.gif)
 
 ## Why
 
@@ -13,7 +13,7 @@ Jupyter belongs in the terminal. epycell gives you:
 - **Kernel-backed LSP** — completions and hover docs from the running namespace, any language
 - **Inline figures** — sixel, kitty graphics, iTerm2 (auto-detected, works everywhere)
 - **Async execution** — run cells without blocking the UI, stream output in real-time
-- **Single binary** — ~2500 lines of Rust, no electron, no browser
+- **Single binary** — ~2500 lines of Rust, no electron, no browser, no Python runtime for the UI
 
 ## Install
 
@@ -31,6 +31,8 @@ pip install ipykernel matplotlib
 ```
 
 epycell auto-discovers your venv — it walks up from the notebook's directory looking for `.venv/`, `venv/`, or `.env/`. Or set `EPYCELL_PYTHON` / `VIRTUAL_ENV` explicitly.
+
+The in-cell editor is your `$VISUAL` or `$EDITOR` (falls back to `vi`). Helix, Neovim, Vim, Emacs — whatever you have configured. The editor runs live inside the cell with full access to your config, plugins, and LSP.
 
 ## Usage
 
