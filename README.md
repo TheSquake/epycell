@@ -1,6 +1,6 @@
 # epycell
 
-Terminal Jupyter notebook — your editor in every cell, kernel completions via LSP.
+Fast Terminal Jupyter notebook written in Rust — your editor in every cell, kernel completions via LSP.
 
 <!-- TODO: replace with your recorded GIF -->
 ![demo](https://raw.githubusercontent.com/TheSquake/epycell/main/demo.gif)
