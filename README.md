@@ -17,7 +17,6 @@
 
 ---
 
-<!-- TODO: replace with your recorded GIF -->
 ![demo](https://raw.githubusercontent.com/TheSquake/epycell/main/demo.gif)
 
 ---
