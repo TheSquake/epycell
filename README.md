@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" width="200" alt="epycell logo">
+</p>
+
 # epycell
 
 Fast Terminal Jupyter notebook written in Rust — your editor in every cell, kernel completions via LSP.
