@@ -119,7 +119,7 @@ move_down = "j, Down"
 # ... see epycell --init for all options
 ```
 
-Bundled syntax themes: Dracula, Gruvbox Dark, Nord, Tokyo Night, Catppuccin Mocha, One Dark.
+Bundled syntax themes: Dracula, Gruvbox Dark, Nord, Tokyo Night, Catppuccin Mocha, One Dark, aidsDick.
 
 ## Why not X?
 
