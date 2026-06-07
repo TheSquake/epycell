@@ -18,6 +18,14 @@ path = "src/main.rs"
 name = "epycell-lsp"
 path = "src/lsp.rs"
 
+[[example]]
+name = "pty_test"
+path = "examples/pty_test.rs"
+
+[[example]]
+name = "sixel_test"
+path = "examples/sixel_test.rs"
+
 [dependencies]
 anyhow = "1.0.102"
 libc = "0.2"

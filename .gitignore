@@ -1,1 +1,5 @@
 /target
+*.mp4
+__pycache__/
+*.pyc
+.venv/
