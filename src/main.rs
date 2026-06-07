@@ -16,6 +16,7 @@ mod config;
 mod kernel;
 mod nb;
 
+use std::cell::{Cell as StdCell, RefCell};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -44,19 +45,37 @@ use tui_term::widget::PseudoTerminal;
 
 type Tui = Terminal<CrosstermBackend<io::Stdout>>;
 
+struct ImageCache {
+    width: u16,
+    height: u16,
+    protocol: ratatui_image::protocol::Protocol,
+}
+
 /// Rendered output ready to draw.
 enum OutputView {
     Text { text: String, style: Style },
-    Image { protocol: ratatui_image::protocol::Protocol, rows: u16 },
+    Image { img: image::DynamicImage, rows_hint: StdCell<u16>, cache: RefCell<Option<ImageCache>> },
 }
 
 impl OutputView {
     fn rows(&self) -> u16 {
         match self {
             OutputView::Text { text, .. } => text.lines().count().max(1) as u16,
-            OutputView::Image { rows, .. } => *rows,
+            OutputView::Image { rows_hint, .. } => rows_hint.get(),
         }
     }
+}
+
+fn image_dims(img: &image::DynamicImage, cfg: &config::Images, avail_cols: u16, font_size: ratatui_image::FontSize) -> (u16, u16) {
+    let max_w = if cfg.max_width == 0 { avail_cols } else { cfg.max_width.min(avail_cols) };
+    let w = (img.width().div_ceil(font_size.width as u32)).min(max_w as u32).max(1) as u16;
+    let h = ((img.height() as f64 / img.width() as f64)
+        * w as f64
+        * (font_size.width as f64 / font_size.height as f64))
+        .ceil() as u16;
+    let h = h.max(1);
+    let max_h = if cfg.max_height == 0 { 30 } else { cfg.max_height };
+    (w, h.min(max_h))
 }
 
 const OUTPUT_CAP: u16 = 50;
@@ -68,7 +87,6 @@ struct Cell {
     running: bool,
     markdown: bool,
     output_expanded: bool,
-    output_scroll: u16, // lines scrolled within the output
 }
 
 impl Cell {
@@ -80,7 +98,6 @@ impl Cell {
             running: false,
             markdown: false,
             output_expanded: false,
-            output_scroll: 0,
         }
     }
 
@@ -95,7 +112,7 @@ impl Cell {
         self.source.split('\n').count().max(1) as u16
     }
 
-    /// How many output blocks are visible, and their total row count.
+    /// How many output blocks are visible and their total row count.
     /// Returns (number of blocks to draw, total rows, is_truncated).
     fn visible_output_layout(&self) -> (usize, u16, bool) {
         let total: u16 = self.outputs.iter().map(|o| o.rows()).sum();
@@ -134,6 +151,9 @@ struct App {
     picker: Picker,
     exec_counter: usize,
     pending_d: bool, // for the `dd` chord
+    pending_y: bool, // for the `yy` chord
+    pending_g: bool, // for the `gg` chord
+    clipboard: Option<(String, bool)>, // (source, is_markdown)
     path: Option<PathBuf>,
     dirty: bool,        // unsaved source changes
     pending_quit: bool, // showing the save-before-quit prompt
@@ -172,6 +192,9 @@ impl App {
             picker,
             exec_counter: 0,
             pending_d: false,
+            pending_y: false,
+            pending_g: false,
+            clipboard: None,
             path,
             dirty: false,
             pending_quit: false,
@@ -215,8 +238,7 @@ impl App {
     fn cell_height(&self, idx: usize) -> u16 {
         let cell = &self.cells[idx];
         let (_, out_rows, truncated) = cell.visible_output_layout();
-        let visible_out = out_rows.saturating_sub(cell.output_scroll);
-        let out = visible_out + if truncated { 1 } else { 0 }; // +1 for indicator
+        let out = out_rows + if truncated { 1 } else { 0 };
         let src = match &self.edit {
             Some(e) if e.idx == idx => e.rows,
             _ if cell.markdown => markdown_rows(&cell.source) + 2,
@@ -225,7 +247,6 @@ impl App {
         1 + src + out
     }
 
-    /// Build image protocols for any PNG outputs, fitting width to a cap.
     fn render_outputs(&self, raw: Vec<Output>) -> Vec<OutputView> {
         let fs = self.picker.font_size();
         let mut views = Vec::new();
@@ -248,23 +269,12 @@ impl App {
                 }
                 Output::Png(bytes) => match image::load_from_memory(&bytes) {
                     Ok(img) => {
-                        let max_w: u32 = 80;
-                        // Compute rows from the image aspect ratio and available width.
-                        // The image will be scaled to fit `w` columns wide, so height
-                        // in rows = (img_h / img_w) * w * (font_w / font_h).
-                        let w = (img.width().div_ceil(fs.width as u32)).min(max_w).max(1) as u16;
-                        let h = ((img.height() as f64 / img.width() as f64)
-                            * w as f64
-                            * (fs.width as f64 / fs.height as f64))
-                            .ceil() as u16;
-                        let h = h.max(1);
-                        match self.picker.new_protocol(img.clone(), Size::new(w, h), Resize::Fit(None)) {
-                            Ok(protocol) => views.push(OutputView::Image { protocol, rows: h }),
-                            Err(e) => views.push(OutputView::Text {
-                                text: format!("<image encode error: {e}>"),
-                                style: Style::default().fg(self.cfg.theme.error),
-                            }),
-                        }
+                        let (_, h) = image_dims(&img, &self.cfg.images, 80, fs);
+                        views.push(OutputView::Image {
+                            img,
+                            rows_hint: StdCell::new(h),
+                            cache: RefCell::new(None),
+                        });
                     }
                     Err(e) => views.push(OutputView::Text {
                         text: format!("<png decode error: {e}>"),
@@ -279,14 +289,14 @@ impl App {
     fn ensure_visible(&mut self, area_height: u16) {
         if self.selected < self.scroll_top {
             self.scroll_top = self.selected;
+            self.scroll_offset = 0;
             return;
         }
 
-        // If selected cell is expanded + running, pin viewport so the bottom
+        // If selected cell is running, pin viewport so the bottom
         // of the cell is visible (follow output as it grows).
         let cell = &self.cells[self.selected];
-        if cell.output_expanded && cell.running {
-            // Sum heights from scroll_top to bottom of selected cell
+        if cell.running {
             loop {
                 let mut y = 0u16;
                 for idx in self.scroll_top..=self.selected {
@@ -296,6 +306,7 @@ impl App {
                     break;
                 }
                 self.scroll_top += 1;
+                self.scroll_offset = 0;
             }
             return;
         }
@@ -316,6 +327,7 @@ impl App {
                 break;
             }
             self.scroll_top += 1;
+            self.scroll_offset = 0;
         }
     }
 }
@@ -393,16 +405,6 @@ fn highlight_code(source: &str, theme: &config::Theme) -> ratatui::text::Text<'s
     ratatui::text::Text::from(lines)
 }
 
-
-/// When expanded, scroll output so the latest lines are visible.
-fn follow_output(cell: &mut Cell) {
-    if !cell.output_expanded {
-        return;
-    }
-    let (_, out_rows, _) = cell.visible_output_layout();
-    // Keep OUTPUT_CAP lines visible at the bottom
-    cell.output_scroll = out_rows.saturating_sub(OUTPUT_CAP);
-}
 
 /// Append `new` to `buf`, handling \r (carriage return) by overwriting from
 /// the start of the current line — this makes progress bars update in place.
@@ -584,26 +586,26 @@ fn draw_cell(f: &mut Frame, app: &App, idx: usize, cell: &Cell, area: Rect, clip
         );
     }
 
-    // outputs — use the shared layout to determine what's visible
+    // outputs — clip_top may eat into the output region too
     let mut oy = src_rect.bottom();
     let (block_count, out_rows, truncated) = cell.visible_output_layout();
-    let scroll = cell.output_scroll.min(out_rows.saturating_sub(1));
+    let out_clip = clip_top.saturating_sub(1 + src_h); // lines to skip in output
     let mut skipped: u16 = 0;
-    let avail_h = area.bottom().saturating_sub(oy);
 
     for out in cell.outputs.iter().take(block_count) {
         if oy >= area.bottom() {
             break;
         }
         let out_h = out.rows();
-        if skipped + out_h <= scroll {
+        if skipped + out_h <= out_clip {
             skipped += out_h;
             continue;
         }
-        let skip_in_block = scroll.saturating_sub(skipped);
-        skipped = scroll;
+        let skip_in_block = out_clip.saturating_sub(skipped);
+        skipped = out_clip;
 
-        let draw_h = (out_h - skip_in_block).min(area.bottom() - oy);
+        let visible_h = out_h - skip_in_block;
+        let draw_h = visible_h.min(area.bottom() - oy);
         let orect = Rect { x: area.x + 1, y: oy, width: area.width.saturating_sub(1), height: draw_h };
         match out {
             OutputView::Text { text, style } => {
@@ -615,9 +617,23 @@ fn draw_cell(f: &mut Frame, app: &App, idx: usize, cell: &Cell, area: Rect, clip
                     orect,
                 );
             }
-            OutputView::Image { protocol, .. } => {
+            OutputView::Image { img, rows_hint, cache } => {
+                let fs = app.picker.font_size();
+                let (w, h) = image_dims(img, &app.cfg.images, area.width.saturating_sub(2), fs);
+                rows_hint.set(h);
+                let needs_rebuild = match cache.borrow().as_ref() {
+                    Some(c) => c.width != w || c.height != h,
+                    None => true,
+                };
+                if needs_rebuild {
+                    if let Ok(proto) = app.picker.new_protocol(img.clone(), Size::new(w, h), Resize::Fit(None)) {
+                        *cache.borrow_mut() = Some(ImageCache { width: w, height: h, protocol: proto });
+                    }
+                }
                 if skip_in_block == 0 {
-                    f.render_widget(Image::new(protocol), orect);
+                    if let Some(c) = cache.borrow().as_ref() {
+                        f.render_widget(Image::new(&c.protocol), orect);
+                    }
                 }
             }
         }
@@ -633,17 +649,6 @@ fn draw_cell(f: &mut Frame, app: &App, idx: usize, cell: &Cell, area: Rect, clip
         f.render_widget(
             Paragraph::new(indicator).style(Style::default().fg(app.cfg.theme.inactive)),
             irect,
-        );
-    }
-
-    // Scroll position indicator when scrolled
-    if scroll > 0 && oy <= area.bottom() && oy > src_rect.bottom() {
-        let pos = format!("[{}/{}]", scroll + avail_h.min(out_rows), out_rows);
-        let px = area.right().saturating_sub(pos.len() as u16 + 1);
-        let prect = Rect { x: px, y: src_rect.bottom(), width: pos.len() as u16, height: 1 };
-        f.render_widget(
-            Paragraph::new(pos).style(Style::default().fg(app.cfg.theme.inactive)),
-            prect,
         );
     }
 }
@@ -765,12 +770,10 @@ async fn poll_running_cell(app: &mut App, session: &mut KernelSession) -> Result
                 apply_cr(&mut buf, &text);
                 app.cells[idx].outputs.push(OutputView::Text { text: buf, style });
             }
-            follow_output(&mut app.cells[idx]);
         }
         Some(CellEvent::Output(raw)) => {
             let views = app.render_outputs(vec![raw]);
             app.cells[idx].outputs.extend(views);
-            follow_output(&mut app.cells[idx]);
         }
         Some(CellEvent::Idle) => {
             app.cells[idx].running = false;
@@ -1116,7 +1119,7 @@ async fn main() -> Result<()> {
     let mut session = KernelSession::launch(&python).await?;
 
     enable_raw_mode()?;
-    execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture, cursor::Hide)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
 
     let cfg = config::load();
@@ -1171,6 +1174,19 @@ async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) 
                             app.scroll_offset = ch.saturating_sub(1);
                         }
                         app.free_scroll = true;
+                    }
+                    MouseEventKind::Down(_) => {
+                        let click_y = mouse.row as i32;
+                        let mut y: i32 = -(app.scroll_offset as i32);
+                        for idx in app.scroll_top..app.cells.len() {
+                            let cell_h = app.cell_height(idx) as i32;
+                            if click_y >= y && click_y < y + cell_h {
+                                app.selected = idx;
+                                app.free_scroll = false;
+                                break;
+                            }
+                            y += cell_h + 1;
+                        }
                     }
                     _ => {}
                 }
@@ -1256,6 +1272,8 @@ async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) 
             app.free_scroll = false;
             app.scroll_offset = 0;
             app.pending_d = false;
+            app.pending_g = false;
+            app.pending_y = false;
         } else if keys.move_up.iter().any(|b| b.matches(code, mods)) {
             if app.selected > 0 {
                 app.selected -= 1;
@@ -1263,6 +1281,8 @@ async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) 
             app.free_scroll = false;
             app.scroll_offset = 0;
             app.pending_d = false;
+            app.pending_g = false;
+            app.pending_y = false;
         } else if keys.edit.iter().any(|b| b.matches(code, mods)) {
             let idx = app.selected;
             let conn = session.connection_file().to_path_buf();
@@ -1298,11 +1318,57 @@ async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) 
         } else if code == KeyCode::Char('x') && mods == KeyModifiers::NONE {
             let cell = &mut app.cells[app.selected];
             cell.output_expanded = !cell.output_expanded;
-            if !cell.output_expanded {
-                cell.output_scroll = 0;
+        } else if code == KeyCode::Char('g') && mods == KeyModifiers::NONE {
+            if app.pending_g {
+                app.selected = 0;
+                app.scroll_top = 0;
+                app.scroll_offset = 0;
+                app.free_scroll = false;
+                app.pending_g = false;
+            } else {
+                app.pending_g = true;
+            }
+        } else if code == KeyCode::Char('G') && mods == KeyModifiers::SHIFT {
+            app.selected = app.cells.len() - 1;
+            let mut remaining = h;
+            let mut top = app.cells.len() - 1;
+            loop {
+                let ch = app.cell_height(top) + 1;
+                if ch >= remaining {
+                    app.scroll_top = top;
+                    app.scroll_offset = ch - remaining;
+                    break;
+                }
+                remaining -= ch;
+                if top == 0 {
+                    app.scroll_top = 0;
+                    app.scroll_offset = 0;
+                    break;
+                }
+                top -= 1;
+            }
+            app.free_scroll = false;
+        } else if code == KeyCode::Char('y') && mods == KeyModifiers::NONE {
+            if app.pending_y {
+                let cell = &app.cells[app.selected];
+                app.clipboard = Some((cell.source.clone(), cell.markdown));
+                app.status = "yanked cell".into();
+                app.pending_y = false;
+            } else {
+                app.pending_y = true;
+            }
+        } else if code == KeyCode::Char('p') && mods == KeyModifiers::NONE {
+            if let Some((src, md)) = app.clipboard.clone() {
+                let new_cell = if md { Cell::markdown(&src) } else { Cell::new(&src) };
+                app.cells.insert(app.selected + 1, new_cell);
+                app.selected += 1;
+                app.dirty = true;
+                app.status = "pasted cell below".into();
             }
         } else {
             app.pending_d = false;
+            app.pending_g = false;
+            app.pending_y = false;
         }
     }
     Ok(())

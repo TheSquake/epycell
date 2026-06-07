@@ -139,14 +139,27 @@ impl Keys {
 }
 
 #[derive(Debug, Clone)]
+pub struct Images {
+    pub max_width: u16,  // 0 = fit to cell width
+    pub max_height: u16, // 0 = half terminal height
+}
+
+impl Default for Images {
+    fn default() -> Self {
+        Self { max_width: 80, max_height: 25 }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Config {
     pub theme: Theme,
     pub keys: Keys,
+    pub images: Images,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { theme: Theme::default(), keys: Keys::default() }
+        Self { theme: Theme::default(), keys: Keys::default(), images: Images::default() }
     }
 }
 
@@ -192,6 +205,10 @@ pub fn load() -> Config {
         if let Some(v) = k.delete.and_then(|s| parse_keys(&s)) { cfg.keys.delete = v; }
         if let Some(v) = k.save.and_then(|s| parse_keys(&s)) { cfg.keys.save = v; }
         if let Some(v) = k.quit.and_then(|s| parse_keys(&s)) { cfg.keys.quit = v; }
+    }
+    if let Some(i) = raw.images {
+        if let Some(w) = i.max_width { cfg.images.max_width = w; }
+        if let Some(h) = i.max_height { cfg.images.max_height = h; }
     }
     cfg
 }
@@ -274,6 +291,13 @@ fn parse_single_key(s: &str) -> Option<KeyBind> {
 struct RawConfig {
     theme: Option<RawTheme>,
     keys: Option<RawKeys>,
+    images: Option<RawImages>,
+}
+
+#[derive(Deserialize, Default)]
+struct RawImages {
+    max_width: Option<u16>,
+    max_height: Option<u16>,
 }
 
 #[derive(Deserialize, Default)]
