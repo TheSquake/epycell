@@ -2,141 +2,134 @@
   <img src="logo.png" width="200" alt="epycell logo">
 </p>
 
-# epycell
+<h1 align="center">epycell</h1>
 
-Fast Terminal Jupyter notebook written in Rust — your editor in every cell, kernel completions via LSP.
+<p align="center">
+  <strong>Jupyter notebooks belong in the terminal.</strong><br>
+  Your editor. Your keybindings. Your workflow. Inline figures. One binary.
+</p>
+
+<p align="center">
+  <a href="https://crates.io/crates/epycell"><img src="https://img.shields.io/crates/v/epycell.svg" alt="crates.io"></a>
+  <a href="https://github.com/TheSquake/epycell/releases"><img src="https://img.shields.io/github/v/release/TheSquake/epycell" alt="release"></a>
+  <a href="https://github.com/TheSquake/epycell/blob/main/LICENSE"><img src="https://img.shields.io/github/license/TheSquake/epycell" alt="license"></a>
+</p>
+
+---
 
 <!-- TODO: replace with your recorded GIF -->
 ![demo](https://raw.githubusercontent.com/TheSquake/epycell/main/demo.gif)
 
-## Why
+---
 
-Jupyter belongs in the terminal. epycell gives you:
+## What is this?
 
-- **Your real editor** (helix/vim/emacs) embedded live in each cell — not a textarea widget
-- **Kernel-backed LSP** — completions and hover docs from the running namespace, any language
-- **Inline figures** — sixel, kitty graphics, iTerm2 (auto-detected, works everywhere)
-- **Async execution** — run cells without blocking the UI, stream output in real-time
-- **Single binary** — ~2500 lines of Rust, no electron, no browser, no Python runtime for the UI
+epycell embeds your **real editor** (Helix, Neovim, Vim, Emacs — whatever `$EDITOR` is) live inside each notebook cell. Not a textarea. Not a reimplementation. The actual editor, with your config, your plugins, your muscle memory.
+
+The kernel gives your editor **completions from the running namespace** via LSP — not static analysis, but the actual variables and functions you've executed. Plots render inline as sixel/kitty/iTerm2 graphics. Everything stays in the terminal.
+
+**~2500 lines of Rust. No Electron. No browser. No Python runtime for the UI.**
 
 ## Install
 
-**Prebuilt binary** (fastest — no compilation):
-```
+```bash
+# Prebuilt binary (no compilation, ~3 seconds)
 cargo binstall epycell
-```
 
-Or download from [GitHub Releases](https://github.com/TheSquake/epycell/releases).
-
-**From source:**
-```
+# Or from source
 cargo install epycell
+
+# Then grab the default config + syntax themes
+epycell --init
 ```
 
-Then run:
-```
-epycell --init    # creates ~/.config/epycell/ with default config + themes
-```
+Or grab a binary directly from [Releases](https://github.com/TheSquake/epycell/releases).
 
 ### Requirements
 
-A Python environment with `ipykernel` and `matplotlib`:
-
-```
+```bash
 pip install ipykernel matplotlib
 ```
 
-epycell auto-discovers your venv — it walks up from the notebook's directory looking for `.venv/`, `venv/`, or `.env/`. Or set `EPYCELL_PYTHON` / `VIRTUAL_ENV` explicitly.
+epycell auto-discovers your venv (walks up looking for `.venv/`, `venv/`, `.env/`). Or set `EPYCELL_PYTHON` / `VIRTUAL_ENV`.
 
-The in-cell editor is your `$VISUAL` or `$EDITOR` (falls back to `vi`). Helix, Neovim, Vim, Emacs — whatever you have configured. The editor runs live inside the cell with full access to your config, plugins, and LSP.
+## Quick start
 
-## Usage
-
-```
-epycell notebook.ipynb     # open a notebook
-epycell                    # scratch notebook (demo cells)
-epycell --init             # install config + syntax themes
+```bash
+epycell notebook.ipynb     # open existing notebook
+epycell                    # scratch pad with demo cells
 ```
 
-### Keybindings (default, all configurable)
+Press `i` to drop into your editor. Write code. Save & quit. Press `Enter` to run. That's it.
+
+## Keybindings
+
+Vim-native by default. All configurable in `~/.config/epycell/config.toml`.
 
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Move between cells |
 | `gg` / `G` | Jump to first / last cell |
-| `Enter` | Run cell |
-| `i` | Edit cell in-place (your $EDITOR, live in the cell) |
+| `i` | Edit cell (your $EDITOR, live in the cell) |
 | `e` | Edit cell full-screen |
+| `Enter` | Run cell |
 | `Ctrl+r` | Run all cells |
-| `Ctrl+a` | Run all cells above + selected |
-| `Ctrl+c` | Interrupt running cell |
+| `Ctrl+a` | Run cells above + selected |
+| `Ctrl+c` | Interrupt |
 | `o` / `O` | New cell below / above |
-| `yy` / `p` | Yank cell / paste below |
-| `x` | Expand/collapse long output |
+| `yy` / `p` | Yank / paste cell |
 | `dd` | Delete cell |
-| `w` | Save |
-| `q` | Quit |
+| `x` | Expand/collapse output |
+| `w` / `q` | Save / quit |
 
-Mouse scroll and click-to-select work everywhere.
+Mouse scroll and click work too.
 
 ## The LSP trick
 
-When you press `i` to edit a cell, epycell spawns `epycell-lsp` — a minimal LSP server that bridges your editor's completion/hover requests to the Jupyter kernel's live namespace via ZMQ. Your editor gets completions from variables, functions, and imports that you've *actually executed*, not static analysis.
-
-Works with any editor that speaks LSP. Editor configs (`.helix/languages.toml`, `.nvim.lua`, `.dir-locals.el`) are auto-generated in the temp edit directory.
+When you edit a cell, epycell spawns a tiny LSP server that bridges your editor to the Jupyter kernel's live namespace over ZMQ. Your editor gets completions for variables that *actually exist at runtime* — not guesses from static analysis.
 
 ```
-┌─────────┐     LSP (stdio)     ┌──────────────┐    ZMQ     ┌────────┐
-│  Editor  │ ◄────────────────► │ epycell-lsp  │ ◄────────► │ Kernel │
-└─────────┘                     └──────────────┘            └────────┘
+┌─────────┐     stdio      ┌──────────────┐     ZMQ      ┌────────┐
+│  Editor  │ ◄───────────► │ epycell-lsp  │ ◄──────────► │ Kernel │
+└─────────┘                └──────────────┘              └────────┘
 ```
+
+Works with any LSP-capable editor. Configs for Helix, Neovim, and Emacs are auto-generated.
 
 ## Configuration
 
-`~/.config/epycell/config.toml` — fully optional, everything has sensible defaults.
+Everything is optional — epycell works out of the box.
 
 ```toml
 [theme]
-bg         = "#0d1926"
-selected   = "#b1b9f9"
-editing    = "#7ab87a"
-inactive   = "#4a5a6a"
-error      = "#b87a7a"
-output     = "#7ab8b8"
-status_nav = "#7a7ab8"
-status_edit = "#7ab87a"
-
-# Built-in: "base16-ocean.dark", "base16-eighties.dark", "Solarized (dark)", etc.
-# Or path to any .tmTheme file:
-syntax_theme = "base16-ocean.dark"
+selected    = "#b1b9f9"
+editing     = "#7ab87a"
+syntax_theme = "base16-ocean.dark"   # or path to any .tmTheme
 
 [images]
-# All values are 0 (unconstrained) by default
-max_width = 80    # max columns (0 = fit to cell width)
-max_height = 25   # max rows (0 = no cap)
-min_width = 20    # min columns (0 = no minimum)
-min_height = 5    # min rows (0 = no minimum)
+max_width  = 80   # 0 = fit to cell width
+max_height = 25   # 0 = no cap
+min_width  = 0    # floor for narrow terminals
+min_height = 0
 
 [keys]
 run       = "Enter"
 edit      = "i"
-quit      = "q"
-# ... see `epycell --init` for all options
+move_down = "j, Down"
+# ... see epycell --init for all options
 ```
 
-### Bundled syntax themes
+Bundled syntax themes: Dracula, Gruvbox Dark, Nord, Tokyo Night, Catppuccin Mocha, One Dark.
 
-`epycell --init` installs: Dracula, Gruvbox Dark, Nord, Tokyo Night, Catppuccin Mocha, One Dark, and aidsDick.
-
-## vs. alternatives
+## Why not X?
 
 | | epycell | euporie | jupyter-console | vim plugins |
 |---|---|---|---|---|
-| Your editor config | ✓ | ✗ (built-in widget) | ✗ | partial |
-| Kernel LSP | ✓ | custom completions | ✗ | ✗ |
-| Inline figures | ✓ (any protocol) | ✓ (sixel) | ✗ | ✗ |
-| Editor-agnostic | ✓ | n/a | n/a | ✗ |
-| Single binary | ✓ | ✗ (Python) | ✗ (Python) | ✗ |
+| Your real editor | **yes** | no (widget) | no | partial |
+| Kernel LSP | **yes** | custom | no | no |
+| Inline figures | **any protocol** | sixel only | no | no |
+| Editor-agnostic | **yes** | n/a | n/a | no |
+| Single binary | **yes** | Python | Python | no |
 
 ## License
 
