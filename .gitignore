@@ -3,3 +3,7 @@
 __pycache__/
 *.pyc
 .venv/
+.python-version
+main.py
+pyproject.toml
+sample.ipynb
