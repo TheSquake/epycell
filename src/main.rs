@@ -623,18 +623,40 @@ fn draw_cell(f: &mut Frame, app: &App, idx: usize, cell: &Cell, area: Rect, clip
                 let fs = app.picker.font_size();
                 let (w, h) = image_dims(img, &app.cfg.images, area.width.saturating_sub(2), fs);
                 rows_hint.set(h);
-                let needs_rebuild = match cache.borrow().as_ref() {
-                    Some(c) => c.width != w || c.height != h,
-                    None => true,
-                };
-                if needs_rebuild {
-                    if let Ok(proto) = app.picker.new_protocol(img.clone(), Size::new(w, h), Resize::Fit(None)) {
-                        *cache.borrow_mut() = Some(ImageCache { width: w, height: h, protocol: proto });
-                    }
+
+                let visible_top = skip_in_block;
+                let visible_h = draw_h;
+
+                if visible_h == 0 {
+                    oy += draw_h;
+                    continue;
                 }
-                if skip_in_block == 0 {
+
+                // Full image visible — use cache
+                if visible_top == 0 && visible_h >= h {
+                    let needs_rebuild = match cache.borrow().as_ref() {
+                        Some(c) => c.width != w || c.height != h,
+                        None => true,
+                    };
+                    if needs_rebuild {
+                        if let Ok(proto) = app.picker.new_protocol(img.clone(), Size::new(w, h), Resize::Fit(None)) {
+                            *cache.borrow_mut() = Some(ImageCache { width: w, height: h, protocol: proto });
+                        }
+                    }
                     if let Some(c) = cache.borrow().as_ref() {
                         f.render_widget(Image::new(&c.protocol), orect);
+                    }
+                } else {
+                    // Partially visible — crop and re-encode
+                    let top_px = (visible_top as u32) * (fs.height as u32);
+                    let bot_px = ((visible_top + visible_h) as u32) * (fs.height as u32);
+                    let top_px = top_px.min(img.height());
+                    let bot_px = bot_px.min(img.height());
+                    if bot_px > top_px {
+                        let cropped = img.crop_imm(0, top_px, img.width(), bot_px - top_px);
+                        if let Ok(proto) = app.picker.new_protocol(cropped, Size::new(w, visible_h), Resize::Fit(None)) {
+                            f.render_widget(Image::new(&proto), orect);
+                        }
                     }
                 }
             }
