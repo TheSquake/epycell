@@ -26,6 +26,11 @@ path = "examples/pty_test.rs"
 name = "sixel_test"
 path = "examples/sixel_test.rs"
 
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/epycell-v{ version }-{ target }.tar.gz"
+bin-dir = "epycell-v{ version }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
 [dependencies]
 anyhow = "1.0.102"
 libc = "0.2"

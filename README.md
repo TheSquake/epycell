@@ -17,8 +17,20 @@ Jupyter belongs in the terminal. epycell gives you:
 
 ## Install
 
+**Prebuilt binary** (fastest — no compilation):
+```
+cargo binstall epycell
+```
+
+Or download from [GitHub Releases](https://github.com/TheSquake/epycell/releases).
+
+**From source:**
 ```
 cargo install epycell
+```
+
+Then run:
+```
 epycell --init    # creates ~/.config/epycell/ with default config + themes
 ```
 
