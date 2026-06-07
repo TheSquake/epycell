@@ -141,12 +141,14 @@ impl Keys {
 #[derive(Debug, Clone)]
 pub struct Images {
     pub max_width: u16,  // 0 = fit to cell width
-    pub max_height: u16, // 0 = half terminal height
+    pub max_height: u16, // 0 = default cap of 30
+    pub min_width: u16,  // 0 = no minimum
+    pub min_height: u16, // 0 = no minimum
 }
 
 impl Default for Images {
     fn default() -> Self {
-        Self { max_width: 80, max_height: 25 }
+        Self { max_width: 0, max_height: 0, min_width: 0, min_height: 0 }
     }
 }
 
@@ -209,6 +211,8 @@ pub fn load() -> Config {
     if let Some(i) = raw.images {
         if let Some(w) = i.max_width { cfg.images.max_width = w; }
         if let Some(h) = i.max_height { cfg.images.max_height = h; }
+        if let Some(w) = i.min_width { cfg.images.min_width = w; }
+        if let Some(h) = i.min_height { cfg.images.min_height = h; }
     }
     cfg
 }
@@ -298,6 +302,8 @@ struct RawConfig {
 struct RawImages {
     max_width: Option<u16>,
     max_height: Option<u16>,
+    min_width: Option<u16>,
+    min_height: Option<u16>,
 }
 
 #[derive(Deserialize, Default)]

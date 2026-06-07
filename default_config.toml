@@ -22,9 +22,13 @@ syntax_theme = "base16-ocean.dark"
 
 [images]
 # max_width: max columns for images (0 = fit to cell width)
-max_width = 80
-# max_height: max rows for images (0 = use default cap of 30)
-max_height = 25
+# max_width = 80
+# max_height: max rows for images (0 = no cap)
+# max_height = 25
+# min_width: minimum columns for images (0 = no minimum)
+# min_width = 20
+# min_height: minimum rows for images (0 = no minimum)
+# min_height = 5
 
 [keys]
 # Format: "key" or "Mod+key" — comma-separated for multiple bindings.

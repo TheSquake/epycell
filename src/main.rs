@@ -69,13 +69,15 @@ impl OutputView {
 fn image_dims(img: &image::DynamicImage, cfg: &config::Images, avail_cols: u16, font_size: ratatui_image::FontSize) -> (u16, u16) {
     let max_w = if cfg.max_width == 0 { avail_cols } else { cfg.max_width.min(avail_cols) };
     let w = (img.width().div_ceil(font_size.width as u32)).min(max_w as u32).max(1) as u16;
+    let w = w.max(cfg.min_width);
     let h = ((img.height() as f64 / img.width() as f64)
         * w as f64
         * (font_size.width as f64 / font_size.height as f64))
         .ceil() as u16;
     let h = h.max(1);
-    let max_h = if cfg.max_height == 0 { 30 } else { cfg.max_height };
-    (w, h.min(max_h))
+    let h = if cfg.max_height > 0 { h.min(cfg.max_height) } else { h };
+    let h = h.max(cfg.min_height);
+    (w, h)
 }
 
 const OUTPUT_CAP: u16 = 50;

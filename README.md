@@ -47,6 +47,7 @@ epycell --init             # install config + syntax themes
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Move between cells |
+| `gg` / `G` | Jump to first / last cell |
 | `Enter` | Run cell |
 | `i` | Edit cell in-place (your $EDITOR, live in the cell) |
 | `e` | Edit cell full-screen |
@@ -54,12 +55,13 @@ epycell --init             # install config + syntax themes
 | `Ctrl+a` | Run all cells above + selected |
 | `Ctrl+c` | Interrupt running cell |
 | `o` / `O` | New cell below / above |
+| `yy` / `p` | Yank cell / paste below |
 | `x` | Expand/collapse long output |
 | `dd` | Delete cell |
 | `w` | Save |
 | `q` | Quit |
 
-Mouse scroll works everywhere — navigate cells, scroll within expanded output, scroll while editing.
+Mouse scroll and click-to-select work everywhere.
 
 ## The LSP trick
 
@@ -91,6 +93,13 @@ status_edit = "#7ab87a"
 # Built-in: "base16-ocean.dark", "base16-eighties.dark", "Solarized (dark)", etc.
 # Or path to any .tmTheme file:
 syntax_theme = "base16-ocean.dark"
+
+[images]
+# All values are 0 (unconstrained) by default
+max_width = 80    # max columns (0 = fit to cell width)
+max_height = 25   # max rows (0 = no cap)
+min_width = 20    # min columns (0 = no minimum)
+min_height = 5    # min rows (0 = no minimum)
 
 [keys]
 run       = "Enter"
