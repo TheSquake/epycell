@@ -516,8 +516,9 @@ fn draw_cell(f: &mut Frame, app: &App, idx: usize, cell: &Cell, area: Rect, clip
     let editing = app.edit.as_ref().map(|e| e.idx) == Some(idx);
 
     // header (skip if clipped)
+    let queued = app.run_queue.contains(&idx);
     let count = cell.exec_count.map(|c| c.to_string()).unwrap_or_else(|| " ".into());
-    let marker = if cell.running { "*" } else { &count };
+    let marker = if cell.running { "*".to_string() } else if queued { "-".to_string() } else { count };
     let header_style = if selected {
         Style::default().fg(app.cfg.theme.selected).add_modifier(Modifier::BOLD)
     } else {
@@ -740,35 +741,39 @@ language-servers = ["epycell-lsp"]
     Ok(std::fs::read_to_string(&cell_file)?)
 }
 
-async fn start_cell_run(app: &mut App, session: &mut KernelSession) -> Result<()> {
-    start_cell_run_at(app, session, app.selected).await
+fn queue_cell(app: &mut App, idx: usize) {
+    if app.cells[idx].markdown {
+        return;
+    }
+    if !app.run_queue.contains(&idx) {
+        app.run_queue.push(idx);
+    }
 }
 
-async fn start_cell_run_at(app: &mut App, session: &mut KernelSession, idx: usize) -> Result<()> {
+async fn start_next_queued(app: &mut App, session: &mut KernelSession) -> Result<()> {
     if app.running_cell.is_some() {
-        app.status = "a cell is already running".into();
         return Ok(());
     }
-    let code = app.cells[idx].source.clone();
-    app.exec_counter += 1;
-    let n = app.exec_counter;
-    app.cells[idx].running = true;
-    app.cells[idx].outputs.clear();
-    app.cells[idx].exec_count = Some(n);
-    app.status = format!("running cell [{n}]…");
+    if let Some(idx) = app.run_queue.first().copied() {
+        app.run_queue.remove(0);
+        let code = app.cells[idx].source.clone();
+        app.exec_counter += 1;
+        let n = app.exec_counter;
+        app.cells[idx].running = true;
+        app.cells[idx].outputs.clear();
+        app.cells[idx].exec_count = Some(n);
+        app.status = format!("running cell [{n}]…");
 
-    let msg_id = session.start_cell(&code).await?;
-    app.running_cell = Some(RunningCell { idx, msg_id, exec_num: n });
+        let msg_id = session.start_cell(&code).await?;
+        app.running_cell = Some(RunningCell { idx, msg_id, exec_num: n });
+    }
     Ok(())
 }
 
 async fn poll_running_cell(app: &mut App, session: &mut KernelSession) -> Result<()> {
     // If nothing running but queue has items, start the next one.
     if app.running_cell.is_none() {
-        if let Some(idx) = app.run_queue.first().copied() {
-            app.run_queue.remove(0);
-            start_cell_run_at(app, session, idx).await?;
-        }
+        start_next_queued(app, session).await?;
         return Ok(());
     }
 
@@ -1162,8 +1167,13 @@ async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) 
         poll_running_cell(&mut app, session).await?;
 
         let h = terminal.size()?.height.saturating_sub(1);
+        let prev_top = app.scroll_top;
+        let prev_off = app.scroll_offset;
         if !app.free_scroll {
             app.ensure_visible(h);
+        }
+        if (app.scroll_top != prev_top || app.scroll_offset != prev_off) && app.cells.iter().any(|c| c.outputs.iter().any(|o| matches!(o, OutputView::Image { .. }))) {
+            terminal.clear()?;
         }
         terminal.draw(|f| draw(f, &app))?;
 
@@ -1259,21 +1269,18 @@ async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) 
         } else if keys.save.iter().any(|b| b.matches(code, mods)) {
             app.save();
         } else if keys.run_all.iter().any(|b| b.matches(code, mods)) {
-            let queue: Vec<usize> = (0..app.cells.len())
-                .filter(|&i| !app.cells[i].markdown)
-                .collect();
-            if !queue.is_empty() {
-                app.run_queue = queue;
-                app.status = format!("running all {} code cells…", app.run_queue.len());
+            for i in 0..app.cells.len() {
+                queue_cell(&mut app, i);
             }
+            app.status = format!("queued {} cells", app.run_queue.len());
+            start_next_queued(&mut app, session).await?;
         } else if keys.run_above.iter().any(|b| b.matches(code, mods)) {
-            let queue: Vec<usize> = (0..=app.selected)
-                .filter(|&i| !app.cells[i].markdown)
-                .collect();
-            if !queue.is_empty() {
-                app.run_queue = queue;
-                app.status = format!("running {} cells up to selected…", app.run_queue.len());
+            let sel = app.selected;
+            for i in 0..=sel {
+                queue_cell(&mut app, i);
             }
+            app.status = format!("queued {} cells", app.run_queue.len());
+            start_next_queued(&mut app, session).await?;
         } else if keys.interrupt.iter().any(|b| b.matches(code, mods)) {
             if let Some(rc) = app.running_cell.take() {
                 session.interrupt();
@@ -1284,10 +1291,12 @@ async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) 
                 app.status = "nothing running".into();
             }
         } else if keys.run.iter().any(|b| b.matches(code, mods)) {
-            if app.cells[app.selected].markdown {
+            let sel = app.selected;
+            if app.cells[sel].markdown {
                 app.status = "markdown cell — nothing to run".into();
             } else {
-                start_cell_run(&mut app, session).await?;
+                queue_cell(&mut app, sel);
+                start_next_queued(&mut app, session).await?;
             }
         } else if keys.move_down.iter().any(|b| b.matches(code, mods)) {
             if app.selected + 1 < app.cells.len() {
