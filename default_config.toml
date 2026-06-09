@@ -1,6 +1,10 @@
-# hxbook configuration
+# epycell configuration
 # All fields are optional — missing values use compiled defaults.
-# Restart hxbook to apply changes.
+# Restart epycell to apply changes.
+
+# Terminal binary for spawning new windows (e.g. claude assistant).
+# Falls back to $TERMINAL env var, then "foot".
+# terminal = "foot"
 
 [theme]
 # UI colors (hex). These style the notebook chrome, not code syntax.
@@ -16,8 +20,8 @@
 # Syntax highlighting theme for code cells.
 # Built-in: "base16-ocean.dark", "base16-eighties.dark", "base16-mocha.dark",
 #           "InspiredGitHub", "Solarized (dark)", "Solarized (light)"
-# Or a path to any .tmTheme file (run `hxbook --init` to install bundled themes):
-#   syntax_theme = "/home/you/.config/hxbook/themes/dracula.tmTheme"
+# Or a path to any .tmTheme file (run `epycell --init` to install bundled themes):
+#   syntax_theme = "/home/you/.config/epycell/themes/dracula.tmTheme"
 syntax_theme = "base16-ocean.dark"
 
 [images]

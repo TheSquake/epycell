@@ -77,6 +77,8 @@ Vim-native by default. All configurable in `~/.config/epycell/config.toml`.
 | `Ctrl+c` | Interrupt |
 | `o` / `O` | New cell below / above |
 | `yy` / `p` | Yank / paste cell |
+| `Y` | Copy cell source to system clipboard |
+| `?` | Ask Claude Code about the focused cell |
 | `dd` | Delete cell |
 | `x` | Expand/collapse output |
 | `w` / `q` | Save / quit |
@@ -100,6 +102,9 @@ Works with any LSP-capable editor. Configs for Helix, Neovim, and Emacs are auto
 Everything is optional — epycell works out of the box.
 
 ```toml
+# Terminal for spawning new windows (? key). Falls back to $TERMINAL, then "foot".
+# terminal = "foot"
+
 [theme]
 selected    = "#b1b9f9"
 editing     = "#7ab87a"

@@ -685,6 +685,26 @@ fn editor_command() -> String {
         .unwrap_or_else(|_| "vi".into())
 }
 
+fn which_claude() -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home".into());
+    let local = format!("{}/.local/bin/claude", home);
+    if Path::new(&local).exists() { local } else { "claude".into() }
+}
+
+fn write_state_file(app: &App) {
+    let cell = &app.cells[app.selected];
+    let state = serde_json::json!({
+        "notebook": app.path.as_ref().map(|p| p.display().to_string()),
+        "selected": app.selected,
+        "total_cells": app.cells.len(),
+        "focused_cell": {
+            "source": cell.source,
+            "markdown": cell.markdown,
+        },
+    });
+    let _ = std::fs::write("/tmp/epycell_state.json", state.to_string());
+}
+
 /// Suspend the TUI, open the cell in the user's $EDITOR, read it back.
 fn external_edit(terminal: &mut Tui, source: &str, conn_file: &Path) -> Result<String> {
     let tmp_dir = tempfile::Builder::new()
@@ -1162,6 +1182,7 @@ async fn main() -> Result<()> {
 }
 
 async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) -> Result<()> {
+    let mut last_state_sel: usize = usize::MAX;
     loop {
         // Poll for async cell output before drawing so updates appear immediately.
         poll_running_cell(&mut app, session).await?;
@@ -1176,6 +1197,11 @@ async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) 
             terminal.clear()?;
         }
         terminal.draw(|f| draw(f, &app))?;
+
+        if app.selected != last_state_sel {
+            last_state_sel = app.selected;
+            write_state_file(&app);
+        }
 
         if !event::poll(Duration::from_millis(50))? {
             continue;
@@ -1390,6 +1416,41 @@ async fn run_app(terminal: &mut Tui, session: &mut KernelSession, mut app: App) 
             } else {
                 app.pending_y = true;
             }
+        } else if code == KeyCode::Char('Y') && mods == KeyModifiers::SHIFT {
+            let cell = &app.cells[app.selected];
+            let src = cell.source.clone();
+            match std::process::Command::new("wl-copy").arg(&src).spawn() {
+                Ok(mut child) => { let _ = child.wait(); app.status = "copied to clipboard".into(); }
+                Err(_) => { app.status = "wl-copy failed (is wl-clipboard installed?)".into(); }
+            }
+        } else if code == KeyCode::Char('?') && mods == KeyModifiers::NONE {
+            let nb_display = app.path.as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "scratch".into());
+            let cwd = app.path.as_ref()
+                .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            let prompt = format!(
+                "The user is working in epycell on notebook `{}`. The file /tmp/epycell_state.json updates live with which cell is currently focused. Read it if the user says \"this cell\" or \"current cell\".",
+                nb_display
+            );
+            let claude_bin = which_claude();
+            let term = &app.cfg.terminal;
+            let supports_title = ["foot", "kitty", "alacritty", "wezterm", "xterm", "xfce4-terminal", "mate-terminal"]
+                .iter().any(|t| term.contains(t));
+            let mut cmd = std::process::Command::new(term);
+            if supports_title { cmd.arg("--title=epycell_claude"); }
+            cmd.arg("--")
+                .arg(&claude_bin)
+                .arg("--append-system-prompt")
+                .arg(&prompt)
+                .arg("--allowedTools")
+                .arg("Read")
+                .current_dir(&cwd)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            let _ = cmd.spawn();
+            app.status = "spawned claude".into();
         } else if code == KeyCode::Char('p') && mods == KeyModifiers::NONE {
             if let Some((src, md)) = app.clipboard.clone() {
                 let new_cell = if md { Cell::markdown(&src) } else { Cell::new(&src) };

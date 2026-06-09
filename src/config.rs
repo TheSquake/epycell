@@ -157,11 +157,13 @@ pub struct Config {
     pub theme: Theme,
     pub keys: Keys,
     pub images: Images,
+    pub terminal: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { theme: Theme::default(), keys: Keys::default(), images: Images::default() }
+        let terminal = std::env::var("TERMINAL").unwrap_or_else(|_| "foot".into());
+        Self { theme: Theme::default(), keys: Keys::default(), images: Images::default(), terminal }
     }
 }
 
@@ -214,6 +216,7 @@ pub fn load() -> Config {
         if let Some(w) = i.min_width { cfg.images.min_width = w; }
         if let Some(h) = i.min_height { cfg.images.min_height = h; }
     }
+    if let Some(t) = raw.terminal { cfg.terminal = t; }
     cfg
 }
 
@@ -296,6 +299,7 @@ struct RawConfig {
     theme: Option<RawTheme>,
     keys: Option<RawKeys>,
     images: Option<RawImages>,
+    terminal: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
