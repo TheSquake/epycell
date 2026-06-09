@@ -125,6 +125,32 @@ move_down = "j, Down"
 
 Bundled syntax themes: Dracula, Gruvbox Dark, Nord, Tokyo Night, Catppuccin Mocha, One Dark, aidsDick.
 
+## Built-in AI assistant
+
+Press `?` on any cell to open an interactive [Claude Code](https://claude.ai/claude-code) session in a new terminal window — already loaded with your full notebook context.
+
+Claude sees which cell you're focused on **in real time**. Navigate to a different cell, ask "what about this one?" — it reads the live state without you having to copy-paste anything.
+
+```
+┌──────────────────────────────────────────────┐
+│ epycell                                      │
+│ ┌──────────────────────────────────────────┐ │
+│ │ [3] x = np.fft.fft(signal)              │◄──── you're focused here
+│ └──────────────────────────────────────────┘ │
+└──────────────────────────────────────────────┘
+        │  ?
+        ▼
+┌──────────────────────────────────────────────┐
+│ claude (interactive)                         │
+│                                              │
+│ ❯ explain this cell                         │
+│                                              │
+│ ● This applies a Fast Fourier Transform...  │
+└──────────────────────────────────────────────┘
+```
+
+Requires `claude` CLI installed. Set `terminal = "kitty"` (or any terminal) in config if you're not on foot.
+
 ## Why not X?
 
 | | epycell | euporie | jupyter-console | vim plugins |
@@ -132,6 +158,7 @@ Bundled syntax themes: Dracula, Gruvbox Dark, Nord, Tokyo Night, Catppuccin Moch
 | Your real editor | **yes** | no (widget) | no | partial |
 | Kernel LSP | **yes** | custom | no | no |
 | Inline figures | **any protocol** | sixel only | no | no |
+| AI assistant (live context) | **yes** | no | no | no |
 | Editor-agnostic | **yes** | n/a | n/a | no |
 | Single binary | **yes** | Python | Python | no |
 
